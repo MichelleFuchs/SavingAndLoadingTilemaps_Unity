@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using System.Collections.Generic;
-
+using UnityEditor;
 
 public class SaveHandler : Singleton<SaveHandler> {
     Dictionary<string, Tilemap> tilemaps = new Dictionary<string, Tilemap>();
@@ -47,9 +47,13 @@ public class SaveHandler : Singleton<SaveHandler> {
                     TileBase tile = mapObj.Value.GetTile(pos);
 
                     if (tile != null) {
-                        TileInfo ti = new TileInfo(tile, pos);
-                        // Add "TileInfo" to "Tiles" List of "TilemapData"
-                        mapData.tiles.Add(ti);
+                        if (AssetDatabase.TryGetGUIDAndLocalFileIdentifier(tile, out string guid, out long localId)) {
+                            TileInfo ti = new TileInfo(tile, pos, guid);
+                            // Add "TileInfo" to "Tiles" List of "TilemapData"
+                            mapData.tiles.Add(ti);
+                        } else {
+                            Debug.LogError("Could not get GUID for tile " + tile.name);
+                        }
                     }
                 }
             }
@@ -78,13 +82,22 @@ public class SaveHandler : Singleton<SaveHandler> {
 
             if (mapData.tiles != null && mapData.tiles.Count > 0) {
                 foreach (var tile in mapData.tiles) {
-                    map.SetTile(tile.position, tile.tile);
-                }
+                    TileBase tileBase = tile.tile;
+                    if (tileBase == null) {
+                        Debug.Log("[Loading Tilemap]: InstanceID not found - looking in AssetDatabase");
+                        string path = AssetDatabase.GUIDToAssetPath(tile.guidFromAssetDB);
+                        tileBase = AssetDatabase.LoadAssetAtPath<TileBase>(path);
 
+                        if (tileBase == null) {
+                            Debug.LogError("[Loading Tilemap]: Tile not found in AssetDatabase");
+                            continue;
+                        }
+                    }
+
+                    map.SetTile(tile.position, tileBase);
+                }
             }
         }
-
-
     }
 }
 
@@ -98,10 +111,12 @@ public class TilemapData {
 [Serializable]
 public class TileInfo {
     public TileBase tile;
+    public string guidFromAssetDB;
     public Vector3Int position;
 
-    public TileInfo(TileBase tile, Vector3Int pos) {
+    public TileInfo(TileBase tile, Vector3Int pos, string guid) {
         this.tile = tile;
         position = pos;
+        guidFromAssetDB = guid;
     }
 }
