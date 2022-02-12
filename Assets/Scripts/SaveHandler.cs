@@ -2,18 +2,34 @@ using System;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using System.Collections.Generic;
-using UnityEditor;
 
 public class SaveHandler : Singleton<SaveHandler> {
     Dictionary<string, Tilemap> tilemaps = new Dictionary<string, Tilemap>();
+    Dictionary<TileBase, BuildingObjectBase> tileBaseToBuildingObject = new Dictionary<TileBase, BuildingObjectBase>();
+    Dictionary<string, TileBase> guidToTileBase = new Dictionary<string, TileBase>();
+
     [SerializeField] BoundsInt bounds;
     [SerializeField] string filename = "tilemapData.json";
 
     private void Start() {
-        initTilemaps();
+        InitTilemaps();
+        InitTileReferences();
     }
 
-    private void initTilemaps() {
+    private void InitTileReferences() {
+        BuildingObjectBase[] buildables = Resources.LoadAll<BuildingObjectBase>("Scriptables/Buildables");
+
+        foreach (BuildingObjectBase buildable in buildables) {
+            if (!tileBaseToBuildingObject.ContainsKey(buildable.TileBase)) {
+                tileBaseToBuildingObject.Add(buildable.TileBase, buildable);
+                guidToTileBase.Add(buildable.name, buildable.TileBase);
+            } else {
+                Debug.LogError("TileBase " + buildable.TileBase.name + " is already in use by " + tileBaseToBuildingObject[buildable.TileBase].name);
+            }
+        }
+    }
+
+    private void InitTilemaps() {
         // get all tilemaps from scene
         // and write to dictionary
         Tilemap[] maps = FindObjectsOfType<Tilemap>();
@@ -26,7 +42,7 @@ public class SaveHandler : Singleton<SaveHandler> {
         }
     }
 
-    public void onSave() {
+    public void OnSave() {
         // List that will later be safed
         List<TilemapData> data = new List<TilemapData>();
 
@@ -46,14 +62,11 @@ public class SaveHandler : Singleton<SaveHandler> {
                     Vector3Int pos = new Vector3Int(x, y, 0);
                     TileBase tile = mapObj.Value.GetTile(pos);
 
-                    if (tile != null) {
-                        if (AssetDatabase.TryGetGUIDAndLocalFileIdentifier(tile, out string guid, out long localId)) {
-                            TileInfo ti = new TileInfo(tile, pos, guid);
-                            // Add "TileInfo" to "Tiles" List of "TilemapData"
-                            mapData.tiles.Add(ti);
-                        } else {
-                            Debug.LogError("Could not get GUID for tile " + tile.name);
-                        }
+                    if (tile != null && tileBaseToBuildingObject.ContainsKey(tile)) {
+                        String guid = tileBaseToBuildingObject[tile].name;
+                        TileInfo ti = new TileInfo(pos, guid);
+                        // Add "TileInfo" to "Tiles" List of "TilemapData"
+                        mapData.tiles.Add(ti);
                     }
                 }
             }
@@ -64,7 +77,7 @@ public class SaveHandler : Singleton<SaveHandler> {
         FileHandler.SaveToJSON<TilemapData>(data, filename);
     }
 
-    public void onLoad() {
+    public void OnLoad() {
         List<TilemapData> data = FileHandler.ReadListFromJSON<TilemapData>(filename);
 
         foreach (var mapData in data) {
@@ -82,19 +95,13 @@ public class SaveHandler : Singleton<SaveHandler> {
 
             if (mapData.tiles != null && mapData.tiles.Count > 0) {
                 foreach (var tile in mapData.tiles) {
-                    TileBase tileBase = tile.tile;
-                    if (tileBase == null) {
-                        Debug.Log("[Loading Tilemap]: InstanceID not found - looking in AssetDatabase");
-                        string path = AssetDatabase.GUIDToAssetPath(tile.guidFromAssetDB);
-                        tileBase = AssetDatabase.LoadAssetAtPath<TileBase>(path);
 
-                        if (tileBase == null) {
-                            Debug.LogError("[Loading Tilemap]: Tile not found in AssetDatabase");
-                            continue;
-                        }
+                    if (guidToTileBase.ContainsKey(tile.guidForBuildable)) {
+                        map.SetTile(tile.position, guidToTileBase[tile.guidForBuildable]);
+                    } else {
+                        Debug.LogError("Refernce " + tile.guidForBuildable + " could not be found.");
                     }
 
-                    map.SetTile(tile.position, tileBase);
                 }
             }
         }
@@ -110,13 +117,11 @@ public class TilemapData {
 
 [Serializable]
 public class TileInfo {
-    public TileBase tile;
-    public string guidFromAssetDB;
+    public string guidForBuildable;
     public Vector3Int position;
 
-    public TileInfo(TileBase tile, Vector3Int pos, string guid) {
-        this.tile = tile;
+    public TileInfo(Vector3Int pos, string guid) {
         position = pos;
-        guidFromAssetDB = guid;
+        guidForBuildable = guid;
     }
 }

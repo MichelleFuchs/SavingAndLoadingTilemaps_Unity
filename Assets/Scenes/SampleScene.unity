@@ -208,7 +208,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 548164037}
         m_TargetAssemblyTypeName: SaveHandler, Assembly-CSharp
-        m_MethodName: onLoad
+        m_MethodName: OnLoad
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -711,7 +711,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 548164037}
         m_TargetAssemblyTypeName: SaveHandler, Assembly-CSharp
-        m_MethodName: onSave
+        m_MethodName: OnSave
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
